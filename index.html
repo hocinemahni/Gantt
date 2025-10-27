@@ -14,11 +14,12 @@
     }
     body{ background:#fff; color:var(--c-text); }
 
-    /* ====== Gantt Canvas ====== */
+    /* ====== Gantt :) Canvas ========= */
     .gantt-board{
       display:grid;
       grid-template-columns: 320px repeat(var(--months, 6), 1fr);
       row-gap: .9rem; column-gap:.5rem; align-items:center; font-size:.96rem;
+      transform-origin: 0 0;
     }
     .month{ font-weight:600; text-align:center; color:#334155; padding:.35rem 0; border:1px solid var(--c-grid); border-radius:.5rem; background:#f8f9fa; box-shadow:var(--shadow); }
     .grid-row{ grid-column:2/-1; height:56px; position:relative; background:repeating-linear-gradient(to right, transparent, transparent 24px, rgba(0,0,0,.04) 24px, rgba(0,0,0,.04) 25px); border-radius:.75rem; overflow:hidden; }
@@ -27,7 +28,10 @@
     .task-title{ line-height:1.2; }
     .task-title small{ color:#6b7280; }
     .export-note{ font-size:.85rem; color:#64748b; }
-    .cursor-move{ cursor:move; }
+
+    /* :) Pan & zoom wrapper :) */
+    #gantt-scroll{ overflow:hidden; cursor:grab; }
+    #gantt-scroll.dragging{ cursor:grabbing; }
   </style>
 </head>
 <body>
@@ -38,7 +42,7 @@
         <h1 class="h3 mb-2">Gantt Builder <span class="text-muted">— Générateur de diagrammes</span></h1>
         <div class="d-flex gap-2 align-items-center">
           <label class="form-label mb-0 me-2">Titre du diagramme</label>
-          <input id="gantt-title" type="text" class="form-control form-control-sm" style="max-width:480px" placeholder="Ex. Planification projet X" value="Planification de taches – Diagramme de Gantt" />
+          <input id="gantt-title" type="text" class="form-control form-control-sm" style="max-width:480px" placeholder="Ex. Planification projet X" value="Planification de tâches – Diagramme de Gantt" />
         </div>
       </div>
       <div class="d-flex flex-wrap gap-2">
@@ -51,7 +55,7 @@
     <!-- Task Editor -->
     <div class="card mb-4 shadow-sm border-0">
       <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Tâches</h2><div class="text-muted export-note">Astuce : vous pouvez changer la couleur de chaque tâche.</div></div>
+        <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Tâches</h2><div class="text-muted export-note">Astuce : vous pouvez changer la couleur de chaque tâche.</div></div>
         <div class="table-responsive">
           <table class="table align-middle">
             <thead>
@@ -71,38 +75,44 @@
       </div>
     </div>
 
-    <!-- Options timeline -->
+    <!-- timeline -->
     <div class="row g-3 mb-4">
-      <div class="col-md-4">
-        <label class="form-label">Afficher la ligne « Aujourd'hui »</label>
+      <div class="col-md-6 d-flex align-items-center gap-3">
         <div class="form-check form-switch">
           <input class="form-check-input" type="checkbox" id="toggle-today" checked>
-          <label class="form-check-label" for="toggle-today">Activée</label>
+          <label class="form-check-label" for="toggle-today">Afficher la ligne « Aujourd'hui »</label>
+        </div>
+        <div class="btn-group btn-group-sm" role="group">
+          <button id="zoom-out" class="btn btn-outline-secondary" title="Dézoomer">−</button>
+          <button id="zoom-reset" class="btn btn-outline-secondary" title="Réinitialiser">100%</button>
+          <button id="zoom-in" class="btn btn-outline-secondary" title="Zoomer">+</button>
         </div>
       </div>
-      <div class="col-md-8 text-end export-note">La frise s'adapte automatiquement à l'intervalle couvrant toutes les tâches.</div>
+      <div class="col-md-6 text-end export-note">La frise s'adapte automatiquement à l'intervalle couvrant toutes les tâches. Astuce : maintenir clic gauche pour déplacer, Ctrl + molette pour zoomer.</div>
     </div>
 
-    <!-- Rendered Gantt -->
+    <!-- :) -->
     <div id="gantt-wrapper" class="p-3 border rounded-3 shadow-sm">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h3 id="title-render" class="h5 mb-0"></h3>
         <div id="period-render" class="text-muted"></div>
       </div>
-      <div id="gantt" class="gantt-board mb-2" style="--months: 6"></div>
+      <div id="gantt-scroll" class="mb-2">
+        <div id="gantt" class="gantt-board" style="--months: 6"></div>
+      </div>
     </div>
   </div>
 
-  <!-- libs for export -->
+  <!-- libs for export ;) -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script>
-    // ===== Utilities
+    // ===== Utilities ==============:)
     const fmt = (d)=> new Date(d);
     const firstOfMonth = (d)=> new Date(d.getFullYear(), d.getMonth(), 1);
     const lastOfMonth  = (d)=> new Date(d.getFullYear(), d.getMonth()+1, 0);
     const addMonths = (d, m)=> new Date(d.getFullYear(), d.getMonth()+m, 1);
-    const monthLabel = (d)=> d.toLocaleDateString('fr-FR',{month:'short', year:'numeric'}).replace('.','');
+    const monthLabel = (d)=> d.toLocaleDateString('fr-FR',{month:'short', year:'numeric'}).replace('.', '');
 
     function rangeMonths(start, end){
       const months=[]; let cur = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -110,11 +120,11 @@
       return months;
     }
 
-    // ===== Task model
+    // ===== Task model (exemple)
     let tasks = [
-      { name:'Tache 1', start:'2025-10-10', end:'2025-11-10', color:'#1E3A8A' },
-      { name:'Tache 2', start:'2025-11-15', end:'2026-12-15', color:'#EAB308' },
-      { name:'Tache 3', start:'2026-12-15', end:'2026-02-15', color:'#22C55E' },
+      { name:'Tâche 1', start:'2025-10-10', end:'2025-11-10', color:'#1E3A8A' },
+      { name:'Tâche 2', start:'2025-11-15', end:'2026-12-15', color:'#EAB308' },
+      { name:'Tâche 3', start:'2026-12-15', end:'2027-02-15', color:'#22C55E' },
     ];
 
     const tbody = document.getElementById('task-rows');
@@ -133,7 +143,7 @@
     function drawTaskTable(){ tbody.innerHTML = tasks.map(rowTemplate).join(''); }
 
     tbody.addEventListener('input', (e)=>{
-      const tr = e.target.closest('tr'); const i = +tr.dataset.i; const k = e.target.dataset.k; tasks[i][k] = e.target.value; });
+      const tr = e.target.closest('tr'); if(!tr) return; const i = +tr.dataset.i; const k = e.target.dataset.k; tasks[i][k] = e.target.value; });
     tbody.addEventListener('click', (e)=>{
       if(e.target.matches('[data-action="del"]')){
         const i = +e.target.closest('tr').dataset.i; tasks.splice(i,1); drawTaskTable(); render();
@@ -145,8 +155,9 @@
       drawTaskTable();
     });
 
-    // ===== Gantt render
+    // ===== Gantt render===============:)
     const gantt = document.getElementById('gantt');
+    const scroll = document.getElementById('gantt-scroll');
 
     function computeBounds(){
       const s = new Date(Math.min(...tasks.map(t=>+fmt(t.start))));
@@ -176,29 +187,22 @@
           <div class="task-title fw-semibold text-nowrap">${t.name}<br><small>(${s.toLocaleDateString('fr-FR')} → ${e.toLocaleDateString('fr-FR')})</small></div>
           <div class="grid-row position-relative">
             ${ showToday ? `<div class="today-line" style="left:${(Date.now()-start)/total*100}%"></div>` : '' }
-            <div class="bar" style="left:${left}%; width:${width}%; background:${t.color}; color:${getTextColor(t.color)};">${labelSpan(s,e)}</div>
-          </div>`;
+            <div class="bar" style="left:${left}%; width:${width}%; background:${t.color}; color:${getTextColor(t.color)};"></div>
+          </div>`; // <-- PAS DE DATES DANS LA BARRE
       });
 
       gantt.innerHTML = html;
       document.getElementById('period-render').textContent = `${monthLabel(start)} → ${monthLabel(end)}`;
-    }
-
-    function labelSpan(s,e){
-      const opts = { month:'short', year:'numeric' };
-      const a = s.toLocaleDateString('fr-FR', opts).replace('.', '');
-      const b = e.toLocaleDateString('fr-FR', opts).replace('.', '');
-      return `${a} – ${b}`;
+      applyTransform();
     }
 
     function getTextColor(hex){
-      // Contrast check to keep text readable
       const c = hex.replace('#','');
       const r=parseInt(c.substr(0,2),16), g=parseInt(c.substr(2,2),16), b=parseInt(c.substr(4,2),16);
       const yiq=((r*299)+(g*587)+(b*114))/1000; return yiq>=128 ? '#111' : '#fff';
     }
 
-    // ===== Export
+    // ===== Export == :)
     document.getElementById('btn-render').addEventListener('click', render);
 
     document.getElementById('btn-png').addEventListener('click', async ()=>{
@@ -225,243 +229,58 @@
       pdf.save((document.getElementById('gantt-title').value||'gantt')+'.pdf');
     });
 
-    // Init
-    drawTaskTable();
-    render();
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gantt Builder – Générateur de diagrammes</title>
-  <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    :root{
-      --c-grid:#E9ECEF;
-      --c-text:#0f172a;
-      --shadow: 0 4px 14px rgba(2,6,23,.08);
-    }
-    body{ background:#fff; color:var(--c-text); }
+    // ===== :) Pan & Zoom :) =====
+    let scale = 1, translateX = 0;
 
-    /* ====== Gantt Canvas ====== */
-    .gantt-board{
-      display:grid;
-      grid-template-columns: 320px repeat(var(--months, 6), 1fr);
-      row-gap: .9rem; column-gap:.5rem; align-items:center; font-size:.96rem;
-    }
-    .month{ font-weight:600; text-align:center; color:#334155; padding:.35rem 0; border:1px solid var(--c-grid); border-radius:.5rem; background:#f8f9fa; box-shadow:var(--shadow); }
-    .grid-row{ grid-column:2/-1; height:56px; position:relative; background:repeating-linear-gradient(to right, transparent, transparent 24px, rgba(0,0,0,.04) 24px, rgba(0,0,0,.04) 25px); border-radius:.75rem; overflow:hidden; }
-    .bar{ position:absolute; top:12px; height:32px; border-radius:.6rem; display:flex; align-items:center; justify-content:center; gap:.5rem; box-shadow:var(--shadow); color:#111; font-weight:700; letter-spacing:.1px; padding:0 .9rem; border:1px solid rgba(0,0,0,.12); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-    .today-line{ position:absolute; top:0; bottom:0; width:2px; background:#ef4444; opacity:.9; }
-    .task-title{ line-height:1.2; }
-    .task-title small{ color:#6b7280; }
-    .export-note{ font-size:.85rem; color:#64748b; }
-    .cursor-move{ cursor:move; }
-  </style>
-</head>
-<body>
-  <div class="container py-4">
-    <!-- Header -->
-    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
-      <div>
-        <h1 class="h3 mb-2">Gantt Builder <span class="text-muted">— Générateur de diagrammes</span></h1>
-        <div class="d-flex gap-2 align-items-center">
-          <label class="form-label mb-0 me-2">Titre du diagramme</label>
-          <input id="gantt-title" type="text" class="form-control form-control-sm" style="max-width:480px" placeholder="Ex. Planification projet X" value="Planification de fin de thèse – Diagramme de Gantt" />
-        </div>
-      </div>
-      <div class="d-flex flex-wrap gap-2">
-        <button id="btn-render" class="btn btn-primary">Mettre à jour le diagramme</button>
-        <button id="btn-png" class="btn btn-outline-secondary">Exporter PNG</button>
-        <button id="btn-pdf" class="btn btn-outline-secondary">Exporter PDF</button>
-      </div>
-    </div>
+    function clamp(v, min, max){ return Math.min(max, Math.max(min, v)); }
 
-    <!-- Task Editor -->
-    <div class="card mb-4 shadow-sm border-0">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Tâches</h2><div class="text-muted export-note">Astuce : vous pouvez changer la couleur de chaque tâche.</div></div>
-        <div class="table-responsive">
-          <table class="table align-middle">
-            <thead>
-              <tr>
-                <th style="width:26px"></th>
-                <th>Nom de la tâche</th>
-                <th style="width:180px">Début</th>
-                <th style="width:180px">Fin</th>
-                <th style="width:120px">Couleur</th>
-                <th style="width:80px"></th>
-              </tr>
-            </thead>
-            <tbody id="task-rows"></tbody>
-          </table>
-        </div>
-        <button id="btn-add" class="btn btn-sm btn-success">+ Ajouter une tâche</button>
-      </div>
-    </div>
-
-    <!-- Options timeline -->
-    <div class="row g-3 mb-4">
-      <div class="col-md-4">
-        <label class="form-label">Afficher la ligne « Aujourd'hui »</label>
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="toggle-today" checked>
-          <label class="form-check-label" for="toggle-today">Activée</label>
-        </div>
-      </div>
-      <div class="col-md-8 text-end export-note">La frise s'adapte automatiquement à l'intervalle couvrant toutes les tâches.</div>
-    </div>
-
-    <!-- Rendered Gantt -->
-    <div id="gantt-wrapper" class="p-3 border rounded-3 shadow-sm">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <h3 id="title-render" class="h5 mb-0"></h3>
-        <div id="period-render" class="text-muted"></div>
-      </div>
-      <div id="gantt" class="gantt-board mb-2" style="--months: 6"></div>
-    </div>
-  </div>
-
-  <!-- libs for export -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script>
-    // ===== Utilities
-    const fmt = (d)=> new Date(d);
-    const firstOfMonth = (d)=> new Date(d.getFullYear(), d.getMonth(), 1);
-    const lastOfMonth  = (d)=> new Date(d.getFullYear(), d.getMonth()+1, 0);
-    const addMonths = (d, m)=> new Date(d.getFullYear(), d.getMonth()+m, 1);
-    const monthLabel = (d)=> d.toLocaleDateString('fr-FR',{month:'short', year:'numeric'}).replace('.','');
-
-    function rangeMonths(start, end){
-      const months=[]; let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-      while(cur <= end){ months.push(new Date(cur)); cur = addMonths(cur,1); }
-      return months;
+    function applyTransform(){
+      gantt.style.transform = `translateX(${translateX}px) scale(${scale})`;
     }
 
-    // ===== Task model
-    let tasks = [
-      { name:'Tache 1', start:'2024-9-20', end:'2025-12-05', color:'#1E3A8A' },
-      { name:'Tache 2', start:'2025-12-1', end:'2026-05-15', color:'#EAB308' },
-      { name:'Tache 3', start:'2026-06-01', end:'2026-06-15', color:'#22C55E' },
-    ];
+    // Drag to pan
+    let drag = { active:false, startX:0, startTX:0 };
+    scroll.addEventListener('mousedown', (e)=>{
+      drag.active = true; drag.startX = e.clientX; drag.startTX = translateX; scroll.classList.add('dragging');
+    });
+    window.addEventListener('mousemove', (e)=>{
+      if(!drag.active) return;
+      const dx = e.clientX - drag.startX;
+      translateX = drag.startTX + dx;
+      applyTransform();
+    });
+    window.addEventListener('mouseup', ()=>{ drag.active = false; scroll.classList.remove('dragging'); });
 
-    const tbody = document.getElementById('task-rows');
-
-    function rowTemplate(t, i){
-      return `<tr data-i="${i}">
-        <td class="text-muted">${i+1}</td>
-        <td><input class="form-control form-control-sm" value="${t.name}" data-k="name"></td>
-        <td><input class="form-control form-control-sm" type="date" value="${t.start}" data-k="start"></td>
-        <td><input class="form-control form-control-sm" type="date" value="${t.end}" data-k="end"></td>
-        <td><input class="form-control form-control-sm" type="color" value="${t.color}" data-k="color"></td>
-        <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-action="del">Supprimer</button></td>
-      </tr>`;
-    }
-
-    function drawTaskTable(){ tbody.innerHTML = tasks.map(rowTemplate).join(''); }
-
-    tbody.addEventListener('input', (e)=>{
-      const tr = e.target.closest('tr'); const i = +tr.dataset.i; const k = e.target.dataset.k; tasks[i][k] = e.target.value; });
-    tbody.addEventListener('click', (e)=>{
-      if(e.target.matches('[data-action="del"]')){
-        const i = +e.target.closest('tr').dataset.i; tasks.splice(i,1); drawTaskTable(); render();
+    // Wheel to scroll horizontally
+    scroll.addEventListener('wheel', (e)=>{
+      if(e.ctrlKey){
+        e.preventDefault();
+        const rect = scroll.getBoundingClientRect();
+        const cx = e.clientX - rect.left; 
+        const prevScale = scale;
+        scale = clamp(scale * (e.deltaY < 0 ? 1.1 : 0.9), 0.5, 4);
+        
+        translateX = cx - (cx - translateX) * (scale/prevScale);
+        applyTransform();
+        updateZoomUI();
+      } else {
+        
+        translateX -= e.deltaY; 
+        translateX -= e.deltaX; 
+        applyTransform();
       }
-    });
+    }, { passive:false });
 
-    document.getElementById('btn-add').addEventListener('click', ()=>{
-      tasks.push({ name:`Tâche ${tasks.length+1}`, start:new Date().toISOString().slice(0,10), end:new Date(Date.now()+86400000*7).toISOString().slice(0,10), color:'#60A5FA' });
-      drawTaskTable();
-    });
-
-    // ===== Gantt render
-    const gantt = document.getElementById('gantt');
-
-    function computeBounds(){
-      const s = new Date(Math.min(...tasks.map(t=>+fmt(t.start))));
-      const e = new Date(Math.max(...tasks.map(t=>+fmt(t.end))));
-      return { start:firstOfMonth(s), end:lastOfMonth(e) };
-    }
-
-    function render(){
-      const title = document.getElementById('gantt-title').value.trim() || 'Diagramme de Gantt';
-      document.getElementById('title-render').textContent = title;
-
-      const { start, end } = computeBounds();
-      const months = rangeMonths(start, end);
-      gantt.style.setProperty('--months', months.length);
-
-      // Header
-      let html = `<div></div>` + months.map(m=>`<div class="month">${monthLabel(m)}</div>`).join('');
-
-      // Rows
-      const total = end - start;
-      const showToday = document.getElementById('toggle-today').checked;
-      tasks.forEach(t=>{
-        const s = fmt(t.start), e = fmt(t.end);
-        const left = Math.max(0, (s - start)/total*100);
-        const width = Math.min(100, (e - start)/total*100) - left;
-        html += `
-          <div class="task-title fw-semibold text-nowrap">${t.name}<br><small>(${s.toLocaleDateString('fr-FR')} → ${e.toLocaleDateString('fr-FR')})</small></div>
-          <div class="grid-row position-relative">
-            ${ showToday ? `<div class="today-line" style="left:${(Date.now()-start)/total*100}%"></div>` : '' }
-            <div class="bar" style="left:${left}%; width:${width}%; background:${t.color}; color:${getTextColor(t.color)};">${labelSpan(s,e)}</div>
-          </div>`;
-      });
-
-      gantt.innerHTML = html;
-      document.getElementById('period-render').textContent = `${monthLabel(start)} → ${monthLabel(end)}`;
-    }
-
-    function labelSpan(s,e){
-      const opts = { month:'short', year:'numeric' };
-      const a = s.toLocaleDateString('fr-FR', opts).replace('.', '');
-      const b = e.toLocaleDateString('fr-FR', opts).replace('.', '');
-      return `${a} – ${b}`;
-    }
-
-    function getTextColor(hex){
-      // Contrast check to keep text readable
-      const c = hex.replace('#','');
-      const r=parseInt(c.substr(0,2),16), g=parseInt(c.substr(2,2),16), b=parseInt(c.substr(4,2),16);
-      const yiq=((r*299)+(g*587)+(b*114))/1000; return yiq>=128 ? '#111' : '#fff';
-    }
-
-    // ===== Export
-    document.getElementById('btn-render').addEventListener('click', render);
-
-    document.getElementById('btn-png').addEventListener('click', async ()=>{
-      const node = document.getElementById('gantt-wrapper');
-      const canvas = await html2canvas(node,{scale:2});
-      const link = document.createElement('a');
-      link.download = (document.getElementById('gantt-title').value||'gantt')+'.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    });
-
-    document.getElementById('btn-pdf').addEventListener('click', async ()=>{
-      const { jsPDF } = window.jspdf;
-      const node = document.getElementById('gantt-wrapper');
-      const canvas = await html2canvas(node,{scale:2});
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation:'landscape', unit:'pt', format:'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const ratio = Math.min(pageWidth/canvas.width, pageHeight/canvas.height);
-      const w = canvas.width*ratio, h = canvas.height*ratio;
-      const x = (pageWidth - w)/2, y = (pageHeight - h)/2;
-      pdf.addImage(imgData,'PNG',x,y,w,h);
-      pdf.save((document.getElementById('gantt-title').value||'gantt')+'.pdf');
-    });
+    // Buttons
+    function updateZoomUI(){ document.getElementById('zoom-reset').textContent = Math.round(scale*100)+'%'; }
+    document.getElementById('zoom-in').addEventListener('click', ()=>{ const p=scale; scale=clamp(scale*1.1,0.5,4); translateX = (translateX)*(scale/p); applyTransform(); updateZoomUI(); });
+    document.getElementById('zoom-out').addEventListener('click', ()=>{ const p=scale; scale=clamp(scale/1.1,0.5,4); translateX = (translateX)*(scale/p); applyTransform(); updateZoomUI(); });
+    document.getElementById('zoom-reset').addEventListener('click', ()=>{ scale=1; translateX=0; applyTransform(); updateZoomUI(); });
 
     // Init
     drawTaskTable();
     render();
+    updateZoomUI();
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
